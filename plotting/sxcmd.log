@@ -1,0 +1,30 @@
+### Custom WaveView ADV log file, revision U-2023.03-SP2 (build Aug 24, ) ###
+### created at 12:43:00 on Thu Feb 15 2024 (Linux AMD64) ###
+### Host Name: willC-2004   User ID: wmc   PID: 2665334   ###
+wv_start_log
+# (0) running in waveview only mode
+# (0) SW_SX_PERL_LIB defined
+# (0) SW_SX_TCL_LIB defined
+# (0) HOME defined
+wv_resize_window {Custom WaveView} 800 400
+wv_move_window {Custom WaveView} {} 1958 324
+wv_select_window {Custom WaveView} 
+wv_resize_window {Custom WaveView} 1920 948
+wv_move_window {Custom WaveView} {} 1920 286
+wv_press_tool_button {Custom WaveView} {} {RecentFile0} 
+wv_select_tree_item {Custom WaveView} {} {hierview} {D0:twostage.ft0(0)} {0} {+sep=@}
+wv_expand_tree_item {Custom WaveView} {} {hierview} {D0:twostage.ft0(0)} {+sep=@}
+wv_select_tree_item {Custom WaveView} {} {hierview} {D0:twostage.ft0(0)} {0} {+sep=@}
+wv_select_tree_item {Custom WaveView} {} {hierview} {D0:twostage.ft0(0)@toplevel(0)} {0} {+sep=@}
+wv_select_tree_item {Custom WaveView} {} {hierview} {D0:twostage.ft0(0)@toplevel(0)} {0} {+sep=@}
+wv_press_tool_button {Custom WaveView} {} {OpenWaveformFile0} 
+wv_move_window {FileDialog} {} 2675 460
+wv_move_window {FileDialog} {} 2685 500
+wv_select_dialog {FileDialog} 
+wv_close_dialog {FileDialog} 
+wv_select_window {Custom WaveView} 
+wv_close_window {Custom WaveView} 
+wv_move_window {Confirmation} {} 2779 711
+wv_move_window {Confirmation} {} 2789 714
+wv_select_dialog {Confirmation} 
+#wv_press_button {Confirmation} {} {Ok} 
