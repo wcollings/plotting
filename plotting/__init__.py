@@ -9,142 +9,10 @@ import numpy as np
 import os
 import sys
 from os import path
+from .mpl import MPL_fig as _fig
 import __main__ as main
 
 __all__=['figure_wrapper']
-class _fig: 
-	fig:Figure
-	axes:list
-	tighten:bool
-	log_axis:int
-	def __init__(self,title:str=""):
-		self.fig=plt.figure()
-		self.fig.suptitle(title)
-		self.axes=[self.fig.gca()]
-		self._fontsize=12
-		self._axis=0
-		self.log_axis=0
-		self.tighten=True
-
-	def plot(self, *args, **kwargs):
-		if not self.axes:
-			self.create_axes(1,1)
-		line=self.axis.plot(*args,**kwargs)
-		self.axis.grid()
-		return line
-
-	def semilogx(self, *args, **kwargs):
-		if not self.axes:
-			self.create_axes(1,1)
-		line=self.axis.semilogx(*args,**kwargs)
-		self.axis.grid()
-		self.log_axis=1
-		return line
-
-	def semilogy(self, *args, **kwargs):
-		if not self.axes:
-			self.create_axes(1,1)
-		line=self.axis.semilogy(*args,**kwargs)
-		self.axis.grid()
-		self.log_axis=2
-		return line
-
-	def loglog(self,*args,**kwargs):
-		if not self.axes:
-			self.create_axes(1,1)
-		line=self.axis.loglog(*args,**kwargs)
-		self.axis.grid()
-		self.log_axis=3
-		return line
-
-
-	def create_axes(self,num_x:int,num_y:int, index:int=1):
-		"""
-		Make the given number of subplots within this figure
-		"""
-		for axis in self.axes:
-			axis.remove()
-		_axes=self.fig.subplots(num_x,num_y, squeeze=False)
-		if isinstance(_axes,Axes):
-			self.axes=[_axes]
-		elif isinstance(_axes,np.ndarray):
-			self.axes=_axes.flatten().tolist()
-
-	def __iter__(self):
-		if isinstance(self.axes,Iterable):
-			yield from self.axes
-		else:
-			yield self.axes
-
-	def clear(self):
-		"""clear this figure of all its subplots."""
-		self.fig.clear()
-		self.axes=[]
-
-	@property
-	def title(self) -> str:
-		return self.fig.get_suptitle()
-	@title.setter
-	def title(self,s):
-		self.fig.suptitle(s)
-	@property
-	def fontsize(self):
-		return self._fontsize
-	@fontsize.setter
-	def fontsize(self,fs:int):
-		self._fontsize=fs
-		for ax in self:
-			for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
-							 ax.get_xticklabels() + ax.get_yticklabels()):
-				item.set_fontsize(fs)
-		plt.rcParams.update({'legend.fontsize':fs})
-	@property
-	def axis(self) -> Axes:
-		# self.axes[self._axis].autoscale(True,'y')
-		return self.axes[self._axis]
-	@axis.setter
-	def axis(self,axis_num:int):
-		if axis_num > len(self.axes):
-			raise IndexError("Requested an axis that is outside the scope of current axes. Please call add_subplot first next time!")
-		self._axis=axis_num
-
-	def __del__(self):
-		for axis in self.axes:
-			del axis
-		del self.fig
-
-	@property
-	def num_subfigs(self):
-		return len(self.axes)
-	@num_subfigs.setter
-	def num_subfigs(self,spec):
-		if sum(spec)-len(spec) >= self.num_subfigs:
-			for ax in self.axes:
-				ax.remove()
-			self.create_axes(*spec)
-
-class _legend:
-	parent:_fig
-	handle_label_map:dict[str,Artist]
-	loc:str
-	def __init__(self,fig):
-		self.parent=fig
-		self.loc="best"
-	def add_entry(self,name,line,loc:str=""):
-		self.handle_label_map[name]=line
-		if loc:
-			self.loc=loc
-	def __bool__(self):
-		return bool(self.handle_label_map) 
-	def create_legend(self):
-		if self.handle_label_map:
-			self.parent.axes[-1].legend(
-					loc=self.loc,
-					handles=self.handle_label_map.values(),
-					labels=self.handle_label_map.keys(),
-					draggable=True)
-
-
 class figure_wrapper:
 	outfile:str
 	tighten:bool
@@ -156,8 +24,10 @@ class figure_wrapper:
 	wait_save:bool
 	interactive:bool
 	show_at_end:bool
+	fix_ticks_at_end:bool
 	_autoscale:bool
-	def __init__(self, outf:str="",interactive=False, show:bool=False, tighten:bool=True):
+	def __init__(self, outf:str="",interactive=False, show:bool=False, tighten:bool=False):
+		# All of this interactive stuff should be moved into the backends
 		# if run from jupyter notebook
 		if "ipykernel" in sys.modules:
 			self.show_at_end=False
@@ -183,6 +53,7 @@ class figure_wrapper:
 		self.legend_loc="best"
 		self.autoscale=False
 		self.tighten=tighten
+		self.fix_ticks_at_end=False
 	@property
 	def fig(self):
 		return self.figs[self.fig_idx]
@@ -289,21 +160,22 @@ class figure_wrapper:
 				xlab:str="",
 				ylab1:str="",
 				ylab2:str="",
+				adjust_ticks:bool=False,
 				**kwargs):
 		plot_args=self.process_args(**kwargs)
 		if self.fig.num_subfigs < 2:
 			self.fig.create_axes(2,1)
-		self.fig.axes[0].plot(x,y1,**plot_args)
-		self.fig.axes[0].set_ylabel(ylab1)
-		tks=self.fig.axes[0].get_xticks()
-		t_delta=float(tks[1])-float(tks[0])
-		# self.fig.axes[0].xaxis.set_ticklabels([])
-		self.fig.axes[1].plot(x,y2,**plot_args)
-		self.fig.axes[1].sharex(self.fig.axes[0])
-		self.fig.axes[1].set_ylabel(ylab2)
-		# self.fig.axes[1].set_xlabel(xlab + f' ({t_delta}us/division)')
+		self.fig.axis=0
+		self.fig.plot(x,y1,**plot_args)
+		self.fig.set_ylabel(ylab1)
 		self.fig.axis=1
+		self.fig.plot(x,y2,**plot_args)
+		self.fig.sharex(self.fig.axes[0])
+		self.fig.set_ylabel(ylab2)
+		self.fig.axis.set_xlabel(xlab)
 		self.draw()
+		if adjust_ticks:
+			self.fix_ticks_at_end = True
 
 	def axline(self,loc:float,axis="x"):
 		if axis=="x":
@@ -311,8 +183,20 @@ class figure_wrapper:
 		else:
 			plt.axhline(loc,linewidth=2,color='k',linestyle='dashed')
 
+	def fix_ticks(self):
+		tks=self.fig.axes[0].get_xticklabels()
+		x1=round(float(tks[1]._x),2)
+		x0=round(float(tks[0]._x),2)
+		t_delta=round(x1-x0,3)
+		self.fig.axes[0].xaxis.set_ticklabels([])
+		xlab= self.fig.axes[1].get_xlabel()
+		print(xlab)
+		self.fig.axes[1].set_xlabel(xlab + f' ({t_delta}µs/division)')
+
 	def save(self,pth:str, wait_save=False, tighten:bool=True):
 		self.fig.tighten=tighten
+		if self.fix_ticks_at_end:
+			self.fix_ticks()
 		if self.make_legend:
 			self.fig.axis.legend(loc=self.legend_loc,draggable=wait_save)
 		if self.autoscale:
@@ -429,4 +313,4 @@ class fig_saver:
 		pth=path.abspath(pth)
 		self.create_dirs(pth)
 		self.fig.fig.savefig(fname=pth)
-		plt.close('all')
+		# plt.close('all')
