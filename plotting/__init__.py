@@ -14,6 +14,71 @@ import __main__ as main
 
 __all__=['figure_wrapper']
 class figure_wrapper:
+	"""
+		Create a figure conveniently. This works both from Jupyter or from a standalone script. Basic operation is described below.
+
+		First, it is recommended to use this with the context manager syntax (with figure_wrapper(...) as fw:).
+		When the context is exited, the figure automatically goes through the save and close procedure!
+		Arguments for the constructor are:
+			outf : str,default=""
+				Where to save the final plot (or set of plots)
+			interactive : bool, default=False
+				Whether this was run from the REPL or a source that can accept user input, or from a script. Default is False, meaning it was run from a script
+			show : bool, default=False
+				If the module is used interactively, this is ignored and internally set to True. Otherwise, this governs whether or not the final plot is displayed before being saved.
+			tighten : bool,default=False
+				This determines if the builtin matplotlib "tighten" function is called before the plot(s) are saved. It's set to False because often the way Matplotlib originally generates the plots is good enough, spacing-wise, and their "tighten" heuristic isn't great, so if it does need to be changed its better to do that manually.
+
+		After the object is constructed, make some lines! With figure_wrapper::plot(...), slogx(...), slogy(...), loglog(...), or plot2(...).
+		You can also make a vertical line with figure_wrapper::axline(...)
+		Using these, you pass in the x- and y-data, and some other specifications as described in `process_args`. These take lists, or 1-D numpy arrays, or tuples, etc.
+		If you have instead an independent (x-axis) array and a function, you can call figure_wrapper::pfunc(...), and pass the function you wish to plot. This essentially calls `map(func,xdata)` and plots the output of that, but is provided for convenience.
+		If you have the data as a pandas Series, the x-axis data is already recorded in the `index` property, and the name you want in the legend is in the Series Name property, you can instead use figure_wrapper::pd(...), and simply pass in the right function, and everything else will be extracted and handled for you. E.G.:
+			>>> df = pandas.DataFrame({'line1':[1,2,3,4], 'line2':[5,6,7,8]}, index=[-1,-2,-3,-4])
+			>>> with figure_wrapper(outf="my_plot.png") as fw:
+			>>>	fw.pd(fw.slogx,df['line1'],...)
+		Plot as many times as you want, subsequent calls just overlay more data unless specified otherwise.
+		To adjust the x-axis, you can either call `set_xlim(x_start,x_end)`, or you can set the property:
+			>>> fw.xlim=(start,end)
+		The same is true for the y-axis.
+		Optionally, you can instead set the property `figure_wrapper.autoscale=True` to let the final x- and y-axes be determined by the max and min x and y axis values plotted on each graph. This is largely untested and should not be relied on, but if it works for you then great.
+
+		You can set the title of the figure with the `set_title` function.
+		You can adjust the font size of all text elements by calling `set_fontsize`.
+
+		I've provided a function called figure_wrapper::fix_ticks, which will take the x-axis and reformat it so that rather than specific values being marked out, the tick labels will be removed and the axis label will be replaced with "Time (xxx us)". You can also set this to be called automatically using the property `fix_ticks_at_end`
+
+		MULTIPLE SUBPLOTS
+		-----------------
+		Sometimes you'll want two plots stacked on top of each other, for which use `plot2` instead. If this is called AFTER the first plotting call, the original graph WILL be lost!
+		If you need more than that, call `figure_wrapper.fig.create_axes(rows,cols). This will clear the current figure, and re-instantiate with whatever configuration was requested.
+		Whatever subplot was drawn to last becomes the default going forward (after plot2, this will be the bottom plot). Calling plot etc. will draw to that subplot only!
+		If you would like to draw to a different plot, you can either specify which plot in the plotting command (again, see process_args), or you can set it as a property:
+			>>> fw.axis=2
+		will set a new default to the third (0-indexing!) subplot.
+		Calling plot2 on a figure which already has subplots registered will plot the lines in the first and second subplots, but will not clear the plot.
+		All subplots will share the same x-axis limits, but not the same y-axis.
+		To adjust the y-axis when subplots exist, it is recommended to adjust this via the property, `figure_wrapper.ylim=bottom,top`. 
+		Using this, if a 2-tuple is passed, this is assumed to be a command intended for the current default subplot, and will adjust accordingly.
+		If a 3-tuple is passed, the first argument is assumed to be the axis index.
+			>>> fw.ylim=1,0.5,1.5
+		will set the second axis (0-indexing!) to show only 0.5->1.5 on the y-axis.
+
+		MULTIPLE FIGURES
+		----------------
+		Sometimes you'll want multiple figure windows with the same data. In this case, just add the argument `new_plot` when you go to plot the data.
+		In the same way as with subplots, this will now becomes the default figure and axis to plot to, so if you need to go back to the original figure window you need to set the property:
+			>>> fw.fig=0
+
+		SAVING
+		------
+		When the context is exited, the figure will go about saving and closing. Some things final things happen at this stage.
+		For every plot, subplot, and figure, the grid will be turned on.
+		If you've set the `tighten` property, the graph will be adjusted accordingly.
+		If you've set autoscale, the limits will be adjusted as best as possible.
+		If the graph is to be shown, it will show up now, and the program will block until the console is advanced.
+		If you set `outf`, the figure will be set to be saved. If this contains forward slashes, indicating a different directory, and that path doesn't exist, it will be created automatically. Then, the figure is saved to that path. The image filetype will be determined by the file extension provided.
+	"""
 	outfile:str
 	tighten:bool
 	figs:list
@@ -70,6 +135,36 @@ class figure_wrapper:
 						name:str="",
 						yy:bool=False,
 						**kwargs):
+		"""
+			Process any additional arguments needed for generating the plot.
+
+			Parameters
+			----------
+			newplot : bool, default=False
+				Whether to plot this in a new figure window, or on the current one
+			hold : bool, default=True
+				Whether to append this line to the last graph, or delete all lines and _just_ plot this new line. `True` means keep the old graph.
+			fig: int, default=-1
+				Specify which figure window to plot to. When a new figure window is created, it can be specified with increasing numbers starting from 0, i.e. a second figure window would be 1, and third would be 2, etc. The default, -1, means "whatever the most recent figure window written to was".
+			prompt_for_resize : bool, default=False
+				this only needs to be set once per `figure_wrapper` object. It determines if you want to just save the graph as it is generated, or if you want to do some manual resizing, or axis tweaking, after all the lines have been plotted but before the graph is saved and closed.
+			legend_loc : str, default=""
+				If you want to specify where the legend goes on the plot, pass that here. Accepts all the arguments that matplotlib.pyplot.Legend.loc accepts
+			plot_loc : int, default=-1
+				set the specific axis within the current (or specified) figure window to plot to. The default, -1, means "whatever the most recent axis written to was".
+			name : str, default=""
+				The name of the line, which will be put into the legend if and when that gets generated. If this is specified for any lines, this also triggers the legend to be generated.
+			yy : bool,default=False
+				Whether this goes on the normal (left) y-axis, or the secondary (right) y-axis.
+			color : Any
+				See accepted matplotlib colors.
+			linewidth : int
+				The line width, default is 2
+			lw : int
+				alias for linewidth
+			**kwargs : dict
+				Anything else that matplotlib.pyplot.plot accepts can be passed here and will be passed on literally.
+		"""
 		if legend_loc !="":
 			self.legend_loc=legend_loc
 		if plot_loc != -1:
@@ -94,19 +189,23 @@ class figure_wrapper:
 		kwargs['label']=name
 		if not "lw" in kwargs and not "linewidth" in kwargs:
 			kwargs['lw']=2
-
-
 		return kwargs
 
 	def plot(self,
 			 x:Iterable,
 			 y:Iterable,/,
 			 **kwargs):
+		"""
+			Create a lin-lin plot, with all provided arguments. For accepted kwargs, see `process_args`
+		"""
 		plot_args=self.process_args(**kwargs)
 		self.fig.plot(x,y,**plot_args) #pyright:ignore
 		self.draw()
 
 	def pd(self,func:Callable,series:list[pd.Series],**kwargs) -> None:
+		'''
+			Process the given function `func` with provided pandas series `series`.
+		'''
 		if func.__name__=="plot2":
 			self.plot2(
 				  series[0].index, 
@@ -127,6 +226,9 @@ class figure_wrapper:
 			  x:Iterable,
 			  y:Iterable,/,
 			  **kwargs):
+		'''
+			semilog plot, with the x-axis in log scale.
+		'''
 		plot_args=self.process_args(**kwargs)
 		self.fig.semilogx(x,y,**plot_args) #pyright:ignore
 		self.draw()
@@ -135,6 +237,9 @@ class figure_wrapper:
 			  x:Iterable,
 			  y:Iterable,/,
 			  **kwargs):
+		'''
+			semilog plot, with the y-axis in log scale
+		'''
 		plot_args=self.process_args(**kwargs)
 		self.fig.semilogy(x,y,**plot_args) #pyright:ignore
 		self.draw()
@@ -143,6 +248,9 @@ class figure_wrapper:
 			  x:Iterable,
 			  y:Iterable,/,
 			  **kwargs):
+		'''
+			log-log plot
+		'''
 		plot_args=self.process_args(**kwargs)
 		self.fig.loglog(x,y,**plot_args) #pyright:ignore
 		self.draw()
@@ -260,7 +368,7 @@ class figure_wrapper:
 			(sel,start,stop)=lims
 		else:
 			(start,stop)=lims
-			sel=0
+			sel=self.fig._axis
 		self.fig.axes[sel].set_ylim(start,stop)
 		self.draw()
 
@@ -302,7 +410,6 @@ class fig_saver:
 			all_breaks[0]='/'+all_breaks[0]
 		else:
 			all_breaks=pth.split('/')
-		dirs_made=[]
 		for dir in accumulate(all_breaks[:-1],func=lambda a,b:f'{a}/{b}'):
 			if not path.exists(dir):
 				os.mkdir(dir)
@@ -313,4 +420,3 @@ class fig_saver:
 		pth=path.abspath(pth)
 		self.create_dirs(pth)
 		self.fig.fig.savefig(fname=pth)
-		# plt.close('all')
